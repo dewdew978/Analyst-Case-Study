@@ -69,7 +69,7 @@ r['insights']=[
 report=Path(__file__).with_name('REPORT.md').read_text(encoding='utf-8')
 recommendations=report.split('### Recommendations',1)[1].split('### Tools & methods',1)[0].strip()
 report_details='### Tools & methods'+report.split('### Tools & methods',1)[1]
-st.title('FruitBlend24 — ยอดขายและกำไร')
+st.title('FruitBlend24 ยอดขายและกำไร')
 st.caption('ข้อมูลสังเคราะห์ ก.ย. 2025–ส.ค. 2026 | บาทไทย | แก้ Notebook แล้ว Run All จากนั้นรีเฟรชแอป')
 st.caption('ต้นทุนวันเปิดขายบางรายการเป็นค่าประมาณ และ P&L รวมของเสียที่ประมาณเพิ่ม 6 รายการแล้ว')
 overview,products,outlook=st.tabs(['ภาพรวม','เมนูและโปรโมชัน','พยากรณ์และวัตถุดิบ'])
