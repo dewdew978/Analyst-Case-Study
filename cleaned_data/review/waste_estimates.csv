@@ -1,0 +1,7 @@
+﻿date,kitchen,sku,units_wasted,reference_days,week_start,fruit_cost_per_cup_thb,packaging_cost_per_cup_thb,est_waste_cost_thb,month,estimated_cost,waste_estimated
+2025-11-26,BKK_Sukhumvit,Guava,3.5,8.0,2025-11-24,8.46,6,50.61,2025-11-01,True,True
+2026-03-16,Pattaya_Beach,Guava,5.0,8.0,2026-03-16,9.47,6,77.35,2026-03-01,True,True
+2025-09-12,BKK_Sukhumvit,Guava,3.0,5.0,2025-09-08,9.47,6,46.41,2025-09-01,True,True
+2025-10-13,Pattaya_Beach,PassionFruit,5.0,8.0,2025-10-13,17.22,6,116.1,2025-10-01,True,True
+2026-07-23,BKK_Ladprao,Watermelon,4.5,8.0,2026-07-20,7.61,6,61.25,2026-07-01,True,True
+2026-05-19,BKK_Ladprao,Watermelon,5.0,8.0,2026-05-18,7.39,6,66.95,2026-05-01,True,True

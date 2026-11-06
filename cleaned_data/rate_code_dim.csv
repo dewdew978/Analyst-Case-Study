@@ -1,0 +1,5 @@
+﻿base_code,rate_code_name,discount_pct,code_pattern,conditions
+RC000,Standard,0.0,{PLATFORM}-RC000,No promotion. Regular menu price.
+RC101,Bundle Deal,0.15,{PLATFORM}-RC101-{SKU},"Randomly scheduled single-SKU bundle discount, ~1 in 10 days per SKU."
+RC102,Double Day New User,0.2,{PLATFORM}-RC102,"New-user acquisition campaign run company-wide on 'double dates' (1/1, 2/2, ... 12/12)."
+RC103,Seasonal Push,0.12,{PLATFORM}-RC103,"Company-wide rainy-season (Jun-Oct) demand-boost discount, run on scattered random days."

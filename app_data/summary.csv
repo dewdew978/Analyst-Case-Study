@@ -1,0 +1,25 @@
+﻿section,item,value,units_wasted,est_waste_cost_thb,reference_days,waste_estimated
+insights,1,"รายได้ 31,146,932.57 บาท แต่ขาดทุนตามต้นทุนที่บันทึก/ประมาณ 403,649.69 บาท และขาดทุน 8 เดือน",,,,
+insights,2,"BKK_Ladprao ขาดทุนสูงสุด 620,967.84 บาท ควรทบทวนปริมาณขายและค่าใช้จ่ายประจำก่อน",,,,
+insights,3,"Mixed Berry ขาดทุนหลังของเสีย 53,860.03 บาทก่อน overhead และต้นทุนผลไม้เพิ่มขึ้น ขณะที่ราคาขายค่อนข้างคงที่",,,,
+insights,4,9 จาก 30 คู่เมนู–แพลตฟอร์ม–โปรมีราคาต่ำกว่าต้นทุนผันแปรฐาน ส.ค.,,,,
+insights,5,"ฐานพยากรณ์ 3 เดือน -766,640.79 บาท เทียบกับแผนทดลอง 31,603.80 บาทภายใต้สมมติฐานที่กำหนด",,,,
+recommendations,1,ราคา/โปร: ทดลอง Mixed Berry 119 บาทและงดโปรลดราคา ทบทวนโปร Passion Fruit; ราคาทดลอง 50/55/55/75 ของเมนูอื่นต้องวัดยอดขายและกำไรรวมก่อนใช้เต็มรูปแบบ,,,,
+recommendations,2,"ครัว: หาแผนลดค่าใช้จ่าย BKK_Ladprao และ BKK_Sukhumvit ครัวละ 15,000 บาท/เดือน โดยยืนยันรายการที่ลดได้จริง ไม่สรุปปิดครัวจากข้อมูลชุดนี้อย่างเดียว",,,,
+recommendations,3,วัตถุดิบ: ทบทวนยอดทุกวัน เติมเป็นรอบตามช่วงขาย ใช้ FEFO และตั้งเป้าลดอัตราของเสียครึ่งหนึ่ง อัปเดตพยากรณ์ทุกสัปดาห์เพราะความคลาดเคลื่อน 3 เดือนสูง,,,,
+quality,แถวซ้ำ,372,,,,
+quality,รายการนอกเมนู,370,,,,
+quality,ชื่อสินค้าหลายแบบ,31,,,,
+quality,ต้นทุนผลไม้ที่ประมาณ,75,,,,
+quality,ต้นทุนของเสียที่ประมาณ,10,,,,
+quality,บันทึกของเสียที่เติมด้วยค่าประมาณ,6,,,,
+estimated_waste,2025-11-26,BKK_Sukhumvit / Guava,3.5,50.61,8.0,True
+estimated_waste,2026-03-16,Pattaya_Beach / Guava,5.0,77.35,8.0,True
+estimated_waste,2025-09-12,BKK_Sukhumvit / Guava,3.0,46.41,5.0,True
+estimated_waste,2025-10-13,Pattaya_Beach / PassionFruit,5.0,116.1,8.0,True
+estimated_waste,2026-07-23,BKK_Ladprao / Watermelon,4.5,61.25,8.0,True
+estimated_waste,2026-05-19,BKK_Ladprao / Watermelon,5.0,66.95,8.0,True
+waste_adjustment,cost_thb,418.67,,,,
+validation,one_month,14.288078660296442,,,,
+validation,three_months,52.21818437081516,,,,
+as_of,date,2026-08-31,,,,

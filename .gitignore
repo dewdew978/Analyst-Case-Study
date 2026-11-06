@@ -1,0 +1,6 @@
+.work/
+backups/
+__pycache__/
+.ipynb_checkpoints/
+.venv/
+FruitBlend24_submission.zip
