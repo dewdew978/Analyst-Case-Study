@@ -42,17 +42,33 @@ def load_data(folder, modified):
     plan['order_cups']=plan['target_cups']
     r['order_plan']=plan[['kitchen','sku','daily_need','target_cups','on_hand','on_order','order_cups']]
     notes=r.pop('summary')
-    for name in ['insights','recommendations']:
-        r[name]=notes.loc[notes['section'].eq(name)].sort_values('item')['value'].tolist()
     r['quality']=notes.loc[notes['section'].eq('quality'),['item','value']].rename(columns={'item':'ปัญหา','value':'จำนวน'})
     r['quality']['จำนวน']=pd.to_numeric(r['quality']['จำนวน'])
     r['waste_estimates']=notes.loc[notes['section'].eq('estimated_waste'),['item','value','units_wasted','est_waste_cost_thb','reference_days','waste_estimated']].rename(columns={'item':'date','value':'kitchen / sku'})
     r['waste_adjustment']=float(notes.loc[notes['section'].eq('waste_adjustment'),'value'].item())
     validation=notes.loc[notes['section'].eq('validation')].set_index('item')['value']
     r['validation_errors']=[float(validation['one_month']),float(validation['three_months'])]
+    r['weekly_wape'],r['fixed_wape']=float(validation['rolling_weekly']),float(validation['fixed_origins'])
+    r['weekly_backtest']=notes.loc[notes['section'].eq('weekly_backtest'),['item','fixed_wape_pct','weekly_wape_pct']].rename(columns={'item':'วันตัดข้อมูล','fixed_wape_pct':'WAPE ตรึงแผน 3 เดือน (%)','weekly_wape_pct':'WAPE อัปเดตทุกสัปดาห์ (%)'})
+    r['forecast_as_of']=pd.Timestamp(notes.loc[notes['section'].eq('as_of'),'value'].item())
+    r['next_review']=pd.Timestamp(notes.loc[notes['section'].eq('forecast_method') & notes['item'].eq('next_review'),'value'].item())
     return r
 
 r=load_data(str(folder),tuple((folder/f'{name}.csv').stat().st_mtime_ns for name in CSV_FILES))
+# ข้อค้นพบคำนวณจากตารางล่าสุด ส่วนคำอธิบายอ่านจากรายงาน
+worst=r['kitchens'].sort_values('operating_profit').iloc[0]
+berry=r['menu'].loc[r['menu']['sku'].eq('MixedBerryPremium')].iloc[0]
+scenario_totals=r['forecast'].groupby('scenario')['operating_profit'].sum()
+r['insights']=[
+    f"รายได้ {r['pnl']['gross_revenue_thb'].sum():,.2f} บาท แต่ขาดทุนตามต้นทุนที่บันทึก/ประมาณ {abs(r['pnl']['operating_profit'].sum()):,.2f} บาท และขาดทุน {r['pnl']['operating_profit'].lt(0).sum()} เดือน",
+    f"{worst['kitchen']} ขาดทุนสูงสุด {abs(worst['operating_profit']):,.2f} บาท ควรทบทวนปริมาณขายและค่าใช้จ่ายประจำก่อน",
+    f"Mixed Berry ขาดทุนหลังของเสีย {abs(berry['contribution']):,.2f} บาทก่อน overhead และต้นทุนผลไม้เพิ่มขึ้น ขณะที่ราคาขายค่อนข้างคงที่",
+    f"{r['promo_check']['profit_before_waste'].lt(0).sum()} จาก {len(r['promo_check'])} คู่เมนู–แพลตฟอร์ม–โปรมีราคาต่ำกว่าต้นทุนผันแปรฐาน ส.ค.",
+    f"ฐานพยากรณ์ 3 เดือน {scenario_totals['ฐาน']:,.2f} บาท เทียบกับแผนทดลอง {scenario_totals['แผนทดลอง']:,.2f} บาทภายใต้สมมติฐานที่กำหนด"
+]
+report=Path(__file__).with_name('REPORT.md').read_text(encoding='utf-8')
+recommendations=report.split('### Recommendations',1)[1].split('### Tools & methods',1)[0].strip()
+report_details='### Tools & methods'+report.split('### Tools & methods',1)[1]
 st.title('FruitBlend24 — ยอดขายและกำไร')
 st.caption('ข้อมูลสังเคราะห์ ก.ย. 2025–ส.ค. 2026 | บาทไทย | แก้ Notebook แล้ว Run All จากนั้นรีเฟรชแอป')
 st.caption('ต้นทุนวันเปิดขายบางรายการเป็นค่าประมาณ และ P&L รวมของเสียที่ประมาณเพิ่ม 6 รายการแล้ว')
@@ -66,10 +82,12 @@ with overview:
     st.plotly_chart(px.bar(r['pnl'],x='month',y='operating_profit',title='กำไรจากการดำเนินงานรายเดือน'))
     for text in r['insights']: st.write(text)
     st.subheader('ข้อเสนอแนะ')
-    for text in r['recommendations']: st.write(text)
+    st.markdown(recommendations)
     st.dataframe(r['pnl'][['month','gross_revenue_thb','revenue_gap','gross_profit','gp_gap','contribution','contribution_gap','operating_profit']],hide_index=True)
     st.caption('งบรายเดือน: รายได้ 2.7 ล้านบาท / GP 7 แสนบาท; GP = รายได้ − ผลไม้ − แพ็กเกจ − แรงงานผันแปร; contribution หักคอมมิชชันและของเสีย; operating profit หัก overhead เพิ่ม นิยามงบไม่แจกแจงครบ จึงแสดงส่วนต่างทั้งสองนิยาม')
     st.dataframe(r['kitchens'],hide_index=True)
+    with st.expander('Tools, assumptions & further work'):
+        st.markdown(report_details)
     with st.expander('คุณภาพข้อมูลและค่าประมาณ'):
         st.dataframe(r['quality'],hide_index=True)
         st.dataframe(r['waste_estimates'],hide_index=True)
@@ -89,8 +107,13 @@ with products:
     st.caption('แต่ละโปรเกิดคนละช่วงและจำนวนวันต่างกัน จึงใช้กำไรต่อแก้วประกอบการตัดสินใจ ไม่ตีความว่ายอดขายที่ต่างกันเกิดจากโปรอย่างเดียว')
 
 with outlook:
-    st.write(f"WAPE ทำนาย ส.ค. {r['validation_errors'][0]:.2f}% | ทำนาย มิ.ย.–ส.ค. รวดเดียว {r['validation_errors'][1]:.2f}%")
-    st.caption('พยากรณ์ด้วยยอดเฉลี่ย 28 วันล่าสุด ความคลาดเคลื่อนระยะยาวสูง ต้องอัปเดตรายสัปดาห์')
+    st.write('Rolling Forecast: เฉลี่ยยอดขาย 28 วันล่าสุด แยกครัวและเมนู แล้วอัปเดตแผนทุก 7 วัน')
+    st.caption(f"ข้อมูลจริงถึง {r['forecast_as_of']:%d/%m/%Y} | รอบทบทวนถัดไปตามเคส {r['next_review']:%d/%m/%Y} เติมข้อมูลจริงแล้วรัน Notebook ใหม่ หากไม่มีข้อมูลเพิ่ม ผลจะยังเท่าเดิม")
+    a,b=st.columns(2)
+    a.metric('WAPE ทยอยอัปเดตทุกสัปดาห์',f"{r['weekly_wape']:.2f}%")
+    b.metric('WAPE ตรึงแผน 3 เดือน',f"{r['fixed_wape']:.2f}%")
+    st.dataframe(r['weekly_backtest'],hide_index=True)
+    st.caption('เทียบช่วงเดียวกันจากวันตัด มี.ค./เม.ย./พ.ค. การอัปเดตใช้ข้อมูลจริงใหม่ทำนายช่วงถัดไป จึงไม่ใช่ความแม่นของการทำนายล่วงหน้า 3 เดือนตั้งแต่วันแรก ช่วงทดสอบซ้อนกันและข้อมูลมีเพียงปีเดียว')
     st.dataframe(r['forecast'],hide_index=True)
     st.caption('แผนทดลอง: ราคา 50/55/55/75/119 บาท; ยอดทั่วไปลด 5%, Berry ลด 20% และงดโปร; อัตราของเสียลดครึ่งหนึ่ง; ตั้งเป้าประหยัดครัวกรุงเทพฯ ครัวละ 15,000 บาท/เดือน สมมติฐานเหล่านี้ยังต้องวัดผลจริง')
     st.plotly_chart(px.bar(r['forecast'],x='month',y='operating_profit',color='scenario',barmode='group',title='กำไรคาดการณ์: ฐานเทียบแผนทดลอง'))
