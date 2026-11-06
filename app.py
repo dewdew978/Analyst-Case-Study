@@ -5,7 +5,7 @@ import streamlit as st
 
 st.set_page_config(page_title='FruitBlend24',layout='wide')
 folder=Path(__file__).with_name('app_data')
-CSV_FILES=['pnl','kitchens','menus','promotions','forecast','inventory','hourly','summary']
+CSV_FILES=['pnl','kitchens','menus','promotions','forecast','inventory','hourly','summary','duplicate_sensitivity','scenario_sensitivity']
 if not all((folder/f'{name}.csv').exists() for name in CSV_FILES):
     st.info('รัน analysis.ipynb ให้ครบก่อน เพื่อสร้าง CSV ใน app_data')
     st.stop()
@@ -59,12 +59,17 @@ r=load_data(str(folder),tuple((folder/f'{name}.csv').stat().st_mtime_ns for name
 worst=r['kitchens'].sort_values('operating_profit').iloc[0]
 berry=r['menu'].loc[r['menu']['sku'].eq('MixedBerryPremium')].iloc[0]
 scenario_totals=r['forecast'].groupby('scenario')['operating_profit'].sum()
+trial_before_saving=r['forecast'].loc[r['forecast']['scenario'].eq('แผนทดลอง'),'profit_before_savings'].sum()
+central_case=r['scenario_sensitivity'].loc[r['scenario_sensitivity']['berry_demand_drop_pct'].eq(20)].set_index(['waste_reduction_pct','monthly_overhead_saving'])['operating_profit_3m']
+plan_bridge=pd.DataFrame({'case':['ฐาน: ดำเนินต่อแบบเดิม','ทดลองราคา: ของเสียและ overhead เดิม','เพิ่มการลดอัตราของเสีย 50%','เพิ่มการประหยัด overhead 30,000 บาท/เดือน'],
+    'operating_profit_3m':[scenario_totals['ฐาน'],central_case.loc[(0,0)],central_case.loc[(50,0)],central_case.loc[(50,30000)]]})
+
 r['insights']=[
     f"รายได้ {r['pnl']['gross_revenue_thb'].sum():,.2f} บาท แต่ขาดทุนตามต้นทุนที่บันทึก/ประมาณ {abs(r['pnl']['operating_profit'].sum()):,.2f} บาท และขาดทุน {r['pnl']['operating_profit'].lt(0).sum()} เดือน",
     f"{worst['kitchen']} ขาดทุนสูงสุด {abs(worst['operating_profit']):,.2f} บาท ควรทบทวนปริมาณขายและค่าใช้จ่ายประจำก่อน",
     f"Mixed Berry ขาดทุนหลังของเสีย {abs(berry['contribution']):,.2f} บาทก่อน overhead และต้นทุนผลไม้เพิ่มขึ้น ขณะที่ราคาขายค่อนข้างคงที่",
     f"{r['promo_check']['profit_before_waste'].lt(0).sum()} จาก {len(r['promo_check'])} คู่เมนู–แพลตฟอร์ม–โปรมีราคาต่ำกว่าต้นทุนผันแปรฐาน ส.ค.",
-    f"ฐานพยากรณ์ 3 เดือน {scenario_totals['ฐาน']:,.2f} บาท เทียบกับแผนทดลอง {scenario_totals['แผนทดลอง']:,.2f} บาทภายใต้สมมติฐานที่กำหนด"
+    f"ฐานพยากรณ์ 3 เดือน {scenario_totals['ฐาน']:,.2f} บาท; แม้ปรับราคาและลดของเสีย 50% ยังขาดทุน {abs(trial_before_saving):,.2f} บาท กำไร {scenario_totals['แผนทดลอง']:,.2f} บาทต้องประหยัด overhead เพิ่มครบ 90,000 บาท"
 ]
 report=Path(__file__).with_name('REPORT.md').read_text(encoding='utf-8')
 recommendations=report.split('### Recommendations',1)[1].split('### Tools & methods',1)[0].strip()
@@ -90,13 +95,17 @@ with overview:
         st.markdown(report_details)
     with st.expander('คุณภาพข้อมูลและค่าประมาณ'):
         st.dataframe(r['quality'],hide_index=True)
+        st.write('Excel ต้นฉบับระบุ exact duplicates และเป็นยอดขายระดับชั่วโมง จึงตัดแถวเหมือนกันเป็นกรณีหลัก พร้อมเทียบกรณีเก็บไว้ทั้งหมด โดยคงของเสียและ overhead เดิม')
+        st.dataframe(r['duplicate_sensitivity'],hide_index=True)
         st.dataframe(r['waste_estimates'],hide_index=True)
         st.write(f"ผลไม้วันเปิดขายขาด 75 แถว ใช้ 33.69 บาท/แก้ว; ของเสีย 4 แถว 96 แก้วประมาณต้นทุน 4,002.24 บาท ส่วนบันทึกที่หาย 6 รายการใช้ค่ามัธยฐานของครัว/เมนู/วันในสัปดาห์เดียวกัน ช่วงก่อนและหลัง 4 สัปดาห์ เพิ่มต้นทุน {r['waste_adjustment']:,.2f} บาท รวมใน P&L แล้ว")
         st.caption('จำนวนเสียที่ประมาณอาจเป็นเศษแก้ว ใช้เป็นค่าคาดหมายทางบัญชี ข้อมูลหลังวันที่ขาดใช้เติมประวัติเท่านั้น ควรแทนค่าประมาณด้วยข้อมูลจริงเมื่อได้รับ')
 
 with products:
     st.plotly_chart(px.line(r['monthly_demand'],x='month',y='cups_per_day',color='sku',markers=True,title='ยอดขายเฉลี่ยต่อวัน'))
-    st.plotly_chart(px.bar(r['hourly'],x='hour',y='cups_per_day',title='ยอดขายเฉลี่ยรายชั่วโมงใน 8 สัปดาห์ล่าสุด'))
+    st.plotly_chart(px.bar(r['hourly'],x='hour',y='cups_per_day',facet_col='kitchen',facet_col_wrap=2,
+        title='ยอดขายเฉลี่ยรายชั่วโมงแยกครัว: 8 สัปดาห์ล่าสุด'))
+    st.caption('ใช้ดูช่วงเตรียมของรายครัว การระบุจำนวนพนักงานต้องมีเวลาทำต่อแก้วและกำลังผลิตเพิ่มเติม')
     st.dataframe(r['menu'],hide_index=True)
     sku=st.selectbox('เลือกเมนู',list(r['prices']['sku']),key='sku')
     st.dataframe(r['prices'].loc[r['prices']['sku'].eq(sku),['sku','base_price_thb','avg_price','profit_per_cup','break_even_LM','break_even_Grab']],hide_index=True)
@@ -114,11 +123,24 @@ with outlook:
     b.metric('WAPE ตรึงแผน 3 เดือน',f"{r['fixed_wape']:.2f}%")
     st.dataframe(r['weekly_backtest'],hide_index=True)
     st.caption('เทียบช่วงเดียวกันจากวันตัด มี.ค./เม.ย./พ.ค. การอัปเดตใช้ข้อมูลจริงใหม่ทำนายช่วงถัดไป จึงไม่ใช่ความแม่นของการทำนายล่วงหน้า 3 เดือนตั้งแต่วันแรก ช่วงทดสอบซ้อนกันและข้อมูลมีเพียงปีเดียว')
+    st.subheader('ผล 3 เดือน แยกเงื่อนไขสะสม')
+    st.dataframe(plan_bridge,hide_index=True)
+    st.write('ยังยืนยันกำไรไม่ได้: ราคาและของเสียตามแผนยังขาดทุนก่อนประหยัด overhead ก้อน 90,000 บาทต้องมีรายการค่าใช้จ่ายที่ลดได้จริง')
     st.dataframe(r['forecast'],hide_index=True)
     st.caption('แผนทดลอง: ราคา 50/55/55/75/119 บาท; ยอดทั่วไปลด 5%, Berry ลด 20% และงดโปร; อัตราของเสียลดครึ่งหนึ่ง; ตั้งเป้าประหยัดครัวกรุงเทพฯ ครัวละ 15,000 บาท/เดือน สมมติฐานเหล่านี้ยังต้องวัดผลจริง')
-    st.plotly_chart(px.bar(r['forecast'],x='month',y='operating_profit',color='scenario',barmode='group',title='กำไรคาดการณ์: ฐานเทียบแผนทดลอง'))
-    st.subheader('วัตถุดิบที่ต้องรองรับ')
+    st.plotly_chart(px.bar(r['forecast'],x='month',y='profit_before_savings',color='scenario',barmode='group',
+        title='กำไรก่อนเงินประหยัดที่ยังไม่ยืนยัน: ฐานเทียบแผนราคาและของเสีย'))
+    st.subheader('Stress test: ยอด Mixed Berry และอัตราของเสีย')
+    saving=st.selectbox('สมมติฐานประหยัด overhead ต่อเดือน (บาท)',[0,30000],key='overhead_saving')
+    stress=r['scenario_sensitivity'].loc[r['scenario_sensitivity']['monthly_overhead_saving'].eq(saving)]
+    matrix=stress.pivot(index='berry_demand_drop_pct',columns='waste_reduction_pct',values='operating_profit_3m')
+    matrix.columns=[f'{int(c)}%' for c in matrix.columns]
+    st.dataframe(matrix.style.format('{:,.2f}'))
+    st.caption('แถว = ยอด Berry ลดลง (%); คอลัมน์ = อัตราของเสียลดลง; ค่า = กำไร 3 เดือน (บาท) ทุกกรณีใช้ราคาทดลองและสมมติยอด 4 เมนูแรกลด 5% ยังไม่ได้วัด elasticity หรือผลต่อการซื้อเมนูอื่น')
+    st.subheader('วัตถุดิบตามกรณีฐาน')
+    st.caption('ใช้ยอดและอัตราของเสียที่สังเกตล่าสุดจนกว่าจะมีผลทดลองจริง ไม่ใช้เป้าลดของเสีย 50% เป็นฐานสั่งซื้อ')
     st.dataframe(r['inventory'],hide_index=True)
-    st.subheader('เป้าสต็อกเริ่มต้น')
+    st.subheader('ตัวอย่างเป้าสต็อกที่ต้องทดสอบก่อนใช้จริง')
     st.dataframe(r['order_plan'],hide_index=True)
     st.caption('หน่วยแก้วเทียบเท่าวัตถุดิบ: ส่ง 1 วัน ทบทวนทุกวัน buffer 0.5 วัน อายุวัตถุดิบสมมติ 3 วัน สต็อกเริ่ม 0 ต้องกรอกของใช้ได้/ของกำลังรับจริงก่อนสั่ง ใช้ FEFO และแบ่งรับ/เตรียมเป็นรอบ การแปลงกิโลกรัมต้องมีสูตรต่อแก้ว')
+    st.caption('ทดลอง 14 วันในหนึ่งครัวและสองเมนูโดยคงราคา/โปรเดิม เก็บวันหมดอายุ เหตุที่ทิ้ง และนาทีสินค้าขาด หากขาดสินค้ามากกว่าฐานให้หยุดลดสต็อกและปรับรอบส่งก่อน รายละเอียดอยู่ใน REPORT.md')
