@@ -5,7 +5,7 @@ import streamlit as st
 
 st.set_page_config(page_title='FruitBlend24',layout='wide')
 folder=Path(__file__).with_name('app_data')
-CSV_FILES=['pnl','kitchens','menus','promotions','forecast','inventory','hourly','summary','duplicate_sensitivity','scenario_sensitivity']
+CSV_FILES=['pnl','kitchens','menus','promotions','forecast','inventory','hourly','summary','duplicate_sensitivity','scenario_sensitivity','platform_performance','night_shift']
 if not all((folder/f'{name}.csv').exists() for name in CSV_FILES):
     st.info('รัน analysis.ipynb ให้ครบก่อน เพื่อสร้าง CSV ใน app_data')
     st.stop()
@@ -27,11 +27,11 @@ def load_data(folder, modified):
     prices['variable_cost']=prices[['fruit','pack','labor']].sum(axis=1)/prices['units']
     prices['waste_per_cup']=prices['waste_cost']/prices['units']
     prices['profit_per_cup']=(prices['profit_before_waste']-prices['waste_cost'])/prices['units']
-    fees=r['promotions'].groupby('platform_name')['commission_rate'].first()
+    fees=r['platform_performance'].set_index('platform_name')['commission_rate']
     prices['break_even_LM']=(prices['variable_cost']+prices['waste_per_cup'])/(1-fees['LINE MAN'])
     prices['break_even_Grab']=(prices['variable_cost']+prices['waste_per_cup'])/(1-fees['Grab'])
     history_names={'actual_days':'active_days','actual_units':'units','actual_revenue':'revenue','actual_profit_before_waste':'profit_before_waste','actual_profit_per_cup':'profit_per_cup'}
-    r['promo_history']=r['promotions'][['sku','platform_name','rate_code_name']+list(history_names)].rename(columns=history_names)
+    r['promo_history']=r['promotions'][['sku','platform_name','base_code','rate_code_name','discount_pct']+list(history_names)].rename(columns=history_names)
     r['promo_check']=r['promotions'].dropna(subset=['model_selling_price']).rename(columns={'model_selling_price':'selling_price','model_profit_before_waste':'profit_before_waste','model_profit_after_waste':'profit_after_waste'})
     detail=r['inventory']
     r['inventory']=detail.groupby(['month','sku'],as_index=False)[['forecast_units','prepared_cups','waste_cups','fruit_value_thb']].sum()
@@ -68,7 +68,7 @@ r['insights']=[
     f"รายได้ {r['pnl']['gross_revenue_thb'].sum():,.2f} บาท แต่ขาดทุนตามต้นทุนที่บันทึก/ประมาณ {abs(r['pnl']['operating_profit'].sum()):,.2f} บาท และขาดทุน {r['pnl']['operating_profit'].lt(0).sum()} เดือน",
     f"{worst['kitchen']} ขาดทุนสูงสุด {abs(worst['operating_profit']):,.2f} บาท ควรทบทวนปริมาณขายและค่าใช้จ่ายประจำก่อน",
     f"Mixed Berry ขาดทุนหลังของเสีย {abs(berry['contribution']):,.2f} บาทก่อน overhead และต้นทุนผลไม้เพิ่มขึ้น ขณะที่ราคาขายค่อนข้างคงที่",
-    f"{r['promo_check']['profit_before_waste'].lt(0).sum()} จาก {len(r['promo_check'])} คู่เมนู–แพลตฟอร์ม–โปรมีราคาต่ำกว่าต้นทุนผันแปรฐาน ส.ค.",
+    f"{r['promo_check']['profit_before_waste'].lt(0).sum()} จาก {len(r['promo_check'])} คู่เมนู–แพลตฟอร์ม–โปรติดลบก่อนของเสีย และ {r['promo_check']['profit_after_waste'].lt(0).sum()} คู่ติดลบหลังของเสีย ฐานต้นทุน ส.ค. ก่อน overhead",
     f"ฐานพยากรณ์ 3 เดือน {scenario_totals['ฐาน']:,.2f} บาท; แม้ปรับราคาและลดของเสีย 50% ยังขาดทุน {abs(trial_before_saving):,.2f} บาท กำไร {scenario_totals['แผนทดลอง']:,.2f} บาทต้องประหยัด overhead เพิ่มครบ 90,000 บาท"
 ]
 report=Path(__file__).with_name('REPORT.md').read_text(encoding='utf-8')
@@ -91,6 +91,19 @@ with overview:
     st.dataframe(r['pnl'][['month','gross_revenue_thb','revenue_gap','gross_profit','gp_gap','contribution','contribution_gap','operating_profit']],hide_index=True)
     st.caption('งบรายเดือน: รายได้ 2.7 ล้านบาท / GP 7 แสนบาท; GP = รายได้ − ผลไม้ − แพ็กเกจ − แรงงานผันแปร; contribution หักคอมมิชชันและของเสีย; operating profit หัก overhead เพิ่ม นิยามงบไม่แจกแจงครบ จึงแสดงส่วนต่างทั้งสองนิยาม')
     st.dataframe(r['kitchens'],hide_index=True)
+    with st.expander('Budget: เกณฑ์งบกับผลขาดทุน'):
+        budget_checks=pd.DataFrame({'indicator':['รายได้ต่ำกว่างบ','GP ต่ำกว่างบตามนิยามในงาน','ขาดทุนจากการดำเนินงาน'],
+            'months':[r['pnl']['revenue_gap'].lt(0).sum(),r['pnl']['gp_gap'].lt(0).sum(),r['pnl']['operating_profit'].lt(0).sum()]})
+        st.dataframe(budget_checks,hide_index=True)
+        revenue_chart=r['pnl'][['month','gross_revenue_thb','budget_revenue_thb']].rename(columns={'gross_revenue_thb':'รายได้จริง','budget_revenue_thb':'งบเดิม'})
+        st.plotly_chart(px.line(revenue_chart,x='month',y=['รายได้จริง','งบเดิม'],markers=True,title='รายได้จริงเทียบงบต้นฉบับ'))
+        st.caption('ต้องยืนยันนิยาม GP ก่อนตัดสินผลงาน มีข้อมูลปีเดียวและเปิด Berry ใน มี.ค. จึงยังไม่ยืนยันฤดูกาล ข้อเสนอปรับงบใช้กับรอบถัดไป โดยคงงบเดิมสำหรับ variance')
+    with st.expander('กะดึก: ประเมินก่อนทดลองลดเวลาเปิด'):
+        night=r['night_shift'].loc[r['night_shift']['kitchen'].str.startswith('BKK')]
+        st.dataframe(night[['kitchen','units_sold','cups_per_night','contribution_per_night_thb','lost_contribution_per_month_thb']],hide_index=True)
+        st.caption('00:00–ก่อน 06:00 เฉลี่ยจากประวัติ 12 เดือน เป็น contribution ก่อนของเสียและ overhead ที่อาจหายไป ต้องเทียบต้นทุนที่ลดเงินจ่ายได้จริง ค่าเช่าและตู้แช่อาจยังต้องจ่าย')
+        st.write('เสนอทดลองหนึ่งครัว 7–14 คืนหลังตรวจตารางคนและต้นทุน ติดตาม contribution รวม ยอดที่ย้ายเวลา/ครัว ของเสีย และ availability โดยแยกจากการเปลี่ยนราคา/สต็อก ยังไม่ได้ใช้เป็นเงินประหยัดใน forecast')
+
     with st.expander('Tools, assumptions & further work'):
         st.markdown(report_details)
     with st.expander('คุณภาพข้อมูลและค่าประมาณ'):
@@ -106,11 +119,18 @@ with products:
     st.plotly_chart(px.bar(r['hourly'],x='hour',y='cups_per_day',facet_col='kitchen',facet_col_wrap=2,
         title='ยอดขายเฉลี่ยรายชั่วโมงแยกครัว: 8 สัปดาห์ล่าสุด'))
     st.caption('ใช้ดูช่วงเตรียมของรายครัว การระบุจำนวนพนักงานต้องมีเวลาทำต่อแก้วและกำลังผลิตเพิ่มเติม')
+
+    st.subheader('ผลแยกแพลตฟอร์ม')
+    st.dataframe(r['platform_performance'][['platform_name','units_sold','revenue_thb','commission_rate','margin_before_waste_pct','benchmark_extra_fee_thb']],hide_index=True)
+    lm=r['platform_performance'].loc[r['platform_performance']['platform_name'].eq('LINE MAN')].iloc[0]
+    st.caption(f"ส่วนต่างคอมมิชชันบนยอด LINE MAN เดิม {lm['benchmark_extra_fee_thb']:,.2f} บาทเป็น benchmark สมมติ ไม่ใช่เงินที่ย้ายช่องทางแล้วได้คืนแน่นอน Margin จริงยังต่างจากส่วนผสมเมนูและโปรได้")
+    st.write(f"ราคาชดเชยคอมมิชชันอย่างเดียว: LINE MAN = Grab × {lm['same_net_price_multiplier']:.6f} หรือสูงกว่าประมาณ {(lm['same_net_price_multiplier']-1)*100:.2f}% ต้องตรวจสัญญาและทดลองผลต่อยอดขาย/กำไรรวมก่อนใช้")
     st.dataframe(r['menu'],hide_index=True)
     sku=st.selectbox('เลือกเมนู',list(r['prices']['sku']),key='sku')
     st.dataframe(r['prices'].loc[r['prices']['sku'].eq(sku),['sku','base_price_thb','avg_price','profit_per_cup','break_even_LM','break_even_Grab']],hide_index=True)
     st.caption('ฐานต้นทุน ส.ค. ราคาคุ้มทุนรวมของเสียเฉลี่ยต่อแก้วแต่ก่อน overhead; Mixed Berry เปิดขาย มี.ค. จึงดูต่อแก้วควบคู่ยอดรวม')
-    st.dataframe(r['promo_check'].loc[r['promo_check']['sku'].eq(sku),['platform_name','rate_code_name','selling_price','profit_after_waste','action']],hide_index=True)
+    st.dataframe(r['promo_check'].loc[r['promo_check']['sku'].eq(sku),['platform_name','base_code','rate_code_name','discount_pct','selling_price','profit_before_waste','profit_after_waste','action']].style.format({'discount_pct':'{:.0%}'}),hide_index=True)
+    st.caption('RC101 ลด 15%, RC102 ลด 20%, RC103 ลด 12% ทบทวนส่วนลดเฉพาะคู่ที่ติดลบหลังของเสีย กำไรต่อแก้วบวกยังไม่พิสูจน์ว่าโปรเพิ่มกำไรรวม')
     with st.expander('ยอดขายและกำไรโปรที่เกิดขึ้นจริง'):
         st.dataframe(r['promo_history'].loc[r['promo_history']['sku'].eq(sku)],hide_index=True)
     st.caption('แต่ละโปรเกิดคนละช่วงและจำนวนวันต่างกัน จึงใช้กำไรต่อแก้วประกอบการตัดสินใจ ไม่ตีความว่ายอดขายที่ต่างกันเกิดจากโปรอย่างเดียว')
